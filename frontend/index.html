@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MIMO 工资评分生成器 Final V1.1</title>
+  <link rel="stylesheet" href="/static/styles.css?v=final1_1" />
+</head>
+<body data-prd="MIMO_WAGE_SCORE" data-page="WAGE_SCORE_UPLOAD" data-component="WAGE_SCORE_APP" data-api="POST /api/wage-score/generate">
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">M</div>
+        <div>
+          <div class="brand-title">MIMO 辅助软件</div>
+          <div class="brand-sub">工资评分独立模块</div>
+        </div>
+      </div>
+      <nav>
+        <a class="nav-item active" href="#">工资评分生成</a>
+        <a class="nav-item disabled" href="#">快速采集</a>
+        <a class="nav-item disabled" href="#">补录任务</a>
+        <a class="nav-item disabled" href="#">统计导出</a>
+      </nav>
+      <div class="side-note">
+        <b>当前版本</b><br />Final V1.1<br />本地运行，不上传外网。<br />默认展开明细；保留多种评分逻辑可切换。
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1>工资评分生成器</h1>
+          <p>上传“米墨评分”和“结算过程表”，页面默认展开每个人评分明细；默认按财务安全模式严格不超发。</p>
+        </div>
+        <div class="status" id="healthStatus">检查中</div>
+      </header>
+
+      <section class="grid">
+        <div class="card upload-card" data-prd="MIMO_WAGE_SCORE" data-page="WAGE_SCORE_UPLOAD" data-component="UPLOAD_PANEL" data-api="POST /api/wage-score/preview">
+          <div class="card-title">1. 上传文件</div>
+          <label class="field-label">米墨评分 Excel <span>* 必选</span></label>
+          <input id="scoreFile" type="file" accept=".xlsx" />
+          <div class="hint">要求字段：姓名、电话、金额。这个表决定实际下发金额。</div>
+
+          <label class="field-label top-gap">结算过程 / 工资明细表 <span>* 建议必选</span></label>
+          <input id="settlementFile" type="file" accept=".xlsx" />
+          <div class="hint">用于回填：预算、已完成场次、本次结算场次、本次可结算最大总金额、是否足额。没有这个表，导出不能完全复刻你给的成品格式。</div>
+
+          <label class="field-label top-gap">评分分摊策略</label>
+          <select id="scoreStrategy" class="text-input">
+            <option value="human_like" selected>人工少量调分：严格不超发（默认｜财务安全）</option>
+            <option value="human_batch_balance">批次差值贴0：允许微超几分钱（仅财务确认后使用）</option>
+            <option value="closest_allow_overpay">逐人四舍五入：单人差值最小（可能微超）</option>
+            <option value="zero_first_high">多行均衡高分（旧V0.6：会动很多行）</option>
+            <option value="last_fill">最后一场补差（旧逻辑：容易低分）</option>
+          </select>
+          <div class="hint">默认严格不超发；评分按人工习惯拆分：多个100%，最后一行过低才换2/3/4/5行。若要整批差值贴0，需要切换到允许微超模式。</div>
+
+          <label class="field-label top-gap">输出文件名</label>
+          <input id="outputName" class="text-input" value="网约工工资明细_生成版.xlsx" />
+
+          <div class="actions">
+            <button id="previewBtn" class="btn secondary">预览导出表</button>
+            <button id="generateBtn" class="btn primary">生成并下载</button>
+          </div>
+        </div>
+
+        <div class="card" data-prd="MIMO_WAGE_SCORE" data-page="WAGE_SCORE_PREVIEW" data-component="RULE_PANEL" data-api="GET /api/health">
+          <div class="card-title">2. 计算规则</div>
+          <div class="rule-row"><span>每场金额</span><b>700 元</b></div>
+          <div class="rule-row"><span>评分精度</span><b>百分比后 2 位</b></div>
+          <div class="rule-row"><span>最小调节</span><b>0.07 元</b></div>
+          <div class="rule-row"><span>默认实付策略</span><b>严格不超发</b></div>
+          <div class="warn">Final V1.1：默认保留 B 严格不超发，同时保留历史多种计算逻辑可切换。默认不允许任何人微超；如切换到批次贴0或逐人四舍五入，可能出现几分钱微超。</div>
+        </div>
+      </section>
+
+      <section class="summary" data-prd="MIMO_WAGE_SCORE" data-page="WAGE_SCORE_PREVIEW" data-component="SUMMARY_PANEL" data-api="POST /api/wage-score/preview">
+        <div class="kpi"><span>人数</span><b id="kpiCount">-</b></div>
+        <div class="kpi"><span>目标金额合计</span><b id="kpiTarget">-</b></div>
+        <div class="kpi"><span>实付金额合计</span><b id="kpiPayout">-</b></div>
+        <div class="kpi"><span>全批次总差值</span><b id="kpiDiff">-</b></div>
+        <div class="kpi"><span>单人最大差值</span><b id="kpiMaxAbsDiff">-</b></div>
+        <div class="kpi"><span>微超人数</span><b id="kpiOverpayCount">-</b></div>
+      </section>
+
+      <section class="card table-card" data-prd="MIMO_WAGE_SCORE" data-page="WAGE_SCORE_EXPORT_PREVIEW" data-component="SHEET1_PREVIEW_TABLE" data-api="POST /api/wage-score/preview">
+        <div class="card-title row-title">
+          <span>3. 导出 Sheet1 预览</span>
+          <span class="title-tip">这里就是导出 Excel 的 Sheet1 预览，11 列结构保持和你给的成品一致</span>
+        </div>
+        <div class="table-wrap sheet1-wrap">
+          <table class="preview-table sheet1-table">
+            <thead>
+              <tr>
+                <th>姓名</th>
+                <th>电话</th>
+                <th>金额</th>
+                <th>预算</th>
+                <th>差额（预算-预付 ）</th>
+                <th>已完成场次</th>
+                <th>本次结算场次</th>
+                <th>本次可结算最大总金额</th>
+                <th>本次可计算金额是否大于或等于实际结算金额</th>
+                <th>五级评价后实付金额</th>
+                <th>差值（五级评价后实付金额-预付）</th>
+              </tr>
+            </thead>
+            <tbody id="previewBody">
+              <tr><td colspan="11" class="empty">请选择 Excel 后点击“预览导出表”。点击“生成并下载”也会先自动刷新这里。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+
+      <section class="card table-card" data-prd="MIMO_WAGE_SCORE" data-page="WAGE_SCORE_FINAL_PREVIEW" data-component="FINAL_AMOUNT_PREVIEW_TABLE" data-api="POST /api/wage-score/preview">
+        <div class="card-title row-title">
+          <span>4. 最终金额明细预览（默认展开）</span>
+          <span class="title-tip">不需要点“展开明细”，这里默认展示全部人员、全部场次评分；导出的“最终金额”Sheet 按同一数据生成</span>
+        </div>
+        <div class="table-wrap final-wrap">
+          <table class="preview-table final-table">
+            <thead>
+              <tr>
+                <th>姓名</th>
+                <th>实际下发金额</th>
+                <th>任务金额</th>
+                <th>评分</th>
+                <th>实付金额</th>
+                <th>差值</th>
+              </tr>
+            </thead>
+            <tbody id="finalBody">
+              <tr><td colspan="6" class="empty">预览后默认展开每个人的全部场次评分明细。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card log-card" data-prd="MIMO_WAGE_SCORE" data-page="WAGE_SCORE_EXPORT" data-component="LOG_PANEL" data-api="POST /api/wage-score/generate">
+        <div class="card-title">5. 运行日志</div>
+        <pre id="logBox">等待操作...</pre>
+      </section>
+    </main>
+  </div>
+  <script src="/static/app.js?v=final1_1"></script>
+</body>
+</html>
